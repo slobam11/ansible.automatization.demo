@@ -1,0 +1,81 @@
+---
+- name: Automatic update/upgrade with daily cron job
+  hosts: all
+  become: true
+  vars:
+    update_hour: 18
+    update_minute: 0
+    log_path: /var/log/auto-update.log
+    script_path: /usr/local/bin/auto-update.sh
+
+    # Upgrade mode: "safe" = apt upgrade, "dist" = apt dist-upgrade
+    upgrade_mode: "safe"
+
+    # Packages to put on hold (skip from upgrades)
+    held_packages:
+      - kubeadm
+      - kubelet
+      - kubectl
+
+  tasks:
+    - name: Ensure cron is installed
+      ansible.builtin.package:
+        name: cron
+        state: present
+
+    - name: Ensure cron service is running and enabled
+      ansible.builtin.service:
+        name: cron
+        state: started
+        enabled: true
+
+    - name: Put selected packages on hold
+      ansible.builtin.command: "apt-mark hold {{ item }}"
+      register: hold_result
+      changed_when: "'hold' in hold_result.stdout or hold_result.rc == 0"
+      failed_when: false
+      loop: "{{ held_packages }}"
+      when: held_packages | length > 0
+
+    - name: Create update/upgrade script
+      ansible.builtin.copy:
+        dest: "{{ script_path }}"
+        mode: "0755"
+        owner: root
+        group: root
+        content: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec >> "{{ log_path }}" 2>&1
+          echo "==== $(date -Iseconds) START ===="
+          apt-get update -y
+
+          # Choose upgrade type based on variable
+          if [ "{{ upgrade_mode }}" = "dist" ]; then
+            apt-get dist-upgrade -y
+          else
+            apt-get upgrade -y
+          fi
+
+          # Optional cleanup
+          apt-get autoremove -y
+          apt-get autoclean -y
+
+          echo "==== $(date -Iseconds) END ===="
+
+    - name: Ensure log file exists
+      ansible.builtin.file:
+        path: "{{ log_path }}"
+        state: touch
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Add daily cron job at 18:00
+      ansible.builtin.cron:
+        name: "Daily auto update/upgrade"
+        minute: "{{ update_minute }}"
+        hour: "{{ update_hour }}"
+        user: root
+        job: "{{ script_path }}"
+
