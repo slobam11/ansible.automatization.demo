@@ -1,12 +1,8 @@
 Hello 
-
-
 # Ansible Auto Update Playbook
 
 This repository contains an Ansible playbook that automates system updates and upgrades by creating a **daily cron job**.  
 The cron job runs every day at **18:00** and logs all output to `/var/log/auto-update.log`.
-
----
 
 ## 🔧 How It Works
 
@@ -22,12 +18,9 @@ The playbook does the following:
 4. Creates the log file if it does not exist.
 5. Adds a **cron job** that runs the script daily at 18:00.
 
----
-
 ## 📝 Playbook (`site.yml`)
 
 ```yaml
----
 - name: Automatic update/upgrade with daily cron job
   hosts: all
   become: true
